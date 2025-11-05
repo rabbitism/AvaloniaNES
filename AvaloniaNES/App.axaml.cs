@@ -60,7 +60,6 @@ public static class ServiceCollectionExtensions
         
         collection.AddSingleton<MainWindowViewModel>();
         collection.AddSingleton<DebuggerViewModel>();
-        collection.AddSingleton<PPUDebuggerViewModel>();
 
         collection.AddSingleton<NESStatus>();
         collection.AddSingleton<PopupHelper>();

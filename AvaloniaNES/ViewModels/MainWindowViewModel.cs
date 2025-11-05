@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls.Notifications;
+using Avalonia.Input;
 using AvaloniaNES.Device.BUS;
 using AvaloniaNES.Device.Cart;
 using AvaloniaNES.Device.CPU;
@@ -20,6 +21,29 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private Bus _nes;
     private PopupHelper _popupHelper;
+    private readonly HashSet<Key> _pressedKeys = new();
+    private readonly Dictionary<string, Key> _keyMap1 = new()
+    {
+        { "A", Key.J },
+        { "B", Key.K },
+        { "Up", Key.W },
+        { "Down", Key.S },
+        { "Left", Key.A },
+        { "Right", Key.D },
+        { "Select", Key.RightShift },
+        { "Start", Key.Enter },
+    };
+    private readonly Dictionary<string, Key> _keyMap2 = new()
+    {
+        { "A", Key.NumPad1 },
+        { "B", Key.NumPad2 },
+        { "Up", Key.Up },
+        { "Down", Key.Down },
+        { "Left", Key.Left },
+        { "Right", Key.Right },
+        { "Select", Key.Add },
+        { "Start", Key.Subtract },
+    };
 
     public MainWindowViewModel(NESStatus status,
         PopupHelper popupHelper, DataCPU data, Bus nes)
@@ -57,6 +81,53 @@ public partial class MainWindowViewModel : ViewModelBase
     /* mvvm */
     [ObservableProperty]private NESStatus _status;
     [ObservableProperty]private DataCPU _data;
+    
+    /* Key */
+    public void HandleKeyDown(Key key)
+    {
+        _pressedKeys.Add(key);
+        ProcessControllerInput();
+    }
+    
+    public void HandleKeyUp(Key key)
+    {
+        _pressedKeys.Remove(key);
+        ProcessControllerInput();
+    }
+    
+    private bool IsKeyPressed(Key key)
+    {
+        return _pressedKeys.Contains(key);
+    }
+    
+    private void ProcessControllerInput()
+    {
+        // player 1
+        var isAPressed = IsKeyPressed(_keyMap1["A"]) ? (byte)0x80 : (byte)0x00;
+        var isBPressed = IsKeyPressed(_keyMap1["B"]) ? (byte)0x40 : (byte)0x00;
+        var isSelectPressed = IsKeyPressed(_keyMap1["Select"]) ? (byte)0x20 : (byte)0x00;
+        var isStartPressed = IsKeyPressed(_keyMap1["Start"]) ? (byte)0x10 : (byte)0x00;
+        var isUpPressed = IsKeyPressed(_keyMap1["Up"]) ? (byte)0x08 : (byte)0x00;
+        var isDownPressed = IsKeyPressed(_keyMap1["Down"]) ? (byte)0x04 : (byte)0x00;
+        var isLeftPressed = IsKeyPressed(_keyMap1["Left"]) ? (byte)0x02 : (byte)0x00;
+        var isRightPressed = IsKeyPressed(_keyMap1["Right"]) ? (byte)0x01 : (byte)0x00;
+        
+        // player 2
+        var isAPressed2 = IsKeyPressed(_keyMap2["A"]) ? (byte)0x80 : (byte)0x00;
+        var isBPressed2 = IsKeyPressed(_keyMap2["B"]) ? (byte)0x40 : (byte)0x00;
+        var isSelectPressed2 = IsKeyPressed(_keyMap2["Select"]) ? (byte)0x20 : (byte)0x00;
+        var isStartPressed2 = IsKeyPressed(_keyMap2["Start"]) ? (byte)0x10 : (byte)0x00;
+        var isUpPressed2 = IsKeyPressed(_keyMap2["Up"]) ? (byte)0x08 : (byte)0x00;
+        var isDownPressed2 = IsKeyPressed(_keyMap2["Down"]) ? (byte)0x04 : (byte)0x00;
+        var isLeftPressed2 = IsKeyPressed(_keyMap2["Left"]) ? (byte)0x02 : (byte)0x00;
+        var isRightPressed2 = IsKeyPressed(_keyMap2["Right"]) ? (byte)0x01 : (byte)0x00;
+    
+        // now, we just use one controller
+        _nes.controller[0] = (byte)(isAPressed | isBPressed | isSelectPressed | isStartPressed | isUpPressed | isDownPressed |
+                             isLeftPressed | isRightPressed);
+        _nes.controller[1] = (byte)(isAPressed2 | isBPressed2 | isSelectPressed2 | isStartPressed2 | isUpPressed2 | isDownPressed2 |
+                             isLeftPressed2 | isRightPressed2);
+    }
     
     /* Command */
     [RelayCommand]
@@ -135,5 +206,18 @@ public partial class MainWindowViewModel : ViewModelBase
         Status.RomName = string.Empty;
         Status.HasLoadRom = false;
         Data.MapAssembly.Clear();
+    }
+
+    [RelayCommand]
+    private void Reset()
+    {
+        _nes.Reset();
+    }
+
+    [RelayCommand]
+    private async Task ShowKeyMap()
+    {
+        var buffer = new KeyMapWindow();
+        await buffer.ShowDialog(_popupHelper._mainWnd!);
     }
 }

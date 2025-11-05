@@ -6,10 +6,6 @@
         <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
         <ApplicationManifest>app.manifest</ApplicationManifest>
         <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-
-        <PublishAot>true</PublishAot>
-        <!-- Necessary before Avalonia 12.0, was used for accessiblity APIs -->
-        <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
     </PropertyGroup>
 
     <ItemGroup>
@@ -29,6 +25,7 @@
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.10" />
         <PackageReference Include="Quick.AvaloniaFonts.Roboto" Version="1.0.0" />
+        <PackageReference Include="Semi.Avalonia" Version="11.3.7" />
     </ItemGroup>
 
     <ItemGroup>
@@ -37,9 +34,5 @@
 
     <ItemGroup>
       <ProjectReference Include="..\AvaloniaNES.Device\AvaloniaNES.Device.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <TrimmerRootDescriptor Include="Rd.xml" />
     </ItemGroup>
 </Project>

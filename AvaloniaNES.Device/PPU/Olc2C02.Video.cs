@@ -121,7 +121,7 @@ public partial class Olc2C02
                     for (var col = 0; col < 8; col++)
                     {
                         // every pixel cost 2 bits, 
-                        var pixel = (byte)((tile_lsb & 0x01) + (tile_msb & 0x01));
+                        var pixel = (byte)(((tile_lsb & 0x01) << 1) | (tile_msb & 0x01));
                         // because byte resolve start with last bit,so pixel is from right to left
                         ScreenPatternTable[index].SetPixel(
                             nTileX * 8 + (7 - col), 

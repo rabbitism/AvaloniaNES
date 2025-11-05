@@ -31,6 +31,17 @@
      public Olc6502? CPU;
      public Olc2C02? PPU;
      public Cartridge? CART;
+     
+     //Controller
+     public byte[] controller = new byte[2];
+     private byte[] controller_state = new byte[2];
+     
+     //DMA
+     private byte dma_addr = 0x00;
+     private byte dma_page = 0x00;
+     private byte dma_data = 0x00;
+     private bool dma_istransfer = false;
+     private bool dma_isdummy = true;
  
      public void ConnectCPU(Olc6502 cpu)
      {
@@ -74,6 +85,12 @@
          {
              result = PPU!.CPURead((ushort)(address & 0x0007), bReadOnly);
          }
+         else if (address >= 0x4016 && address <= 0x4017)
+         {
+             // always loop
+             result = (controller_state[address & 0x0001] & 0x80) > 0 ? (byte)1 : (byte)0;
+             controller_state[address & 0x0001] <<= 1;
+         }
  
          return result;
      }
@@ -93,6 +110,18 @@
              // ppu ram
              PPU!.CPUWrite((ushort)(address & 0x0007), value);
          }
+         else if (address == 0x4014)
+         {
+             // dma
+             dma_page = value;
+             dma_addr = 0x00;
+             dma_istransfer = true;
+         }
+         else if (address >= 0x4016 && address <= 0x4017)
+         {
+             // controller
+             controller_state[address & 0x0001] = controller[address & 0x0001];
+         }
      }
      public void Reset()
      {
@@ -107,7 +136,6 @@
          //Flash DataView
          UpdateInfo?.Invoke();
      }
- 
      public void Clock()
      {
          if (CART == null) return;  //No cartridge
@@ -118,7 +146,43 @@
          //CPU
          if (nSystemClockCounter % 3 == 0)  //PPU is run 3 times per CPU cycle
          {
-             CPU!.Clock();
+             if (dma_istransfer)
+             {
+                 // lock cpu when dma is transfer data
+                 // dma transfer must sync with other device,this must be emulated
+                 if (dma_isdummy)
+                 {
+                     if (nSystemClockCounter % 2 == 1)
+                     {
+                         dma_isdummy = false;
+                     }
+                 }
+                 else
+                 {
+                     if (nSystemClockCounter % 2 == 0)
+                     {
+                         // 1 clock read
+                         dma_data = CPURead((ushort)((dma_page << 8) | dma_addr));
+                     }
+                     else
+                     {
+                         // 1 clock transfer
+                         PPU!.WriteOAMByte(dma_addr, dma_data);
+                         dma_addr++;
+
+                         if (dma_addr == 0x00)
+                         {
+                             // complete transfer, reset flag
+                             dma_istransfer = false;
+                             dma_isdummy = true;
+                         }
+                     } 
+                 }
+             }
+             else
+             {
+                 CPU!.Clock();
+             }
          }
          
          //Check NMI Flag

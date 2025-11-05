@@ -1,8 +1,12 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Threading;
 using AvaloniaNES.Device.BUS;
 using AvaloniaNES.Models;
+using AvaloniaNES.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AvaloniaNES.Views;
@@ -15,6 +19,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        KeyDown += OnKeyDown;
+        KeyUp += OnKeyUp;
+        
         m_Video.Source = _bus.PPU!.GetScreen();
         _renderTimer = new DispatcherTimer
         {
@@ -22,6 +29,29 @@ public partial class MainWindow : Window
         };
         _renderTimer.Tick += OnRenderFrame;
         _renderTimer.Start();
+
+        Task.Run(() =>
+        {
+            while (true)
+            {
+                if (_status.HasLoadRom)
+                {
+                    // Run Clock
+                    if (_status.BusState == BUS_STATE.RUN)
+                    {
+                        do
+                        {
+                            _bus.Clock();
+                        } while (!_bus.PPU!.FrameCompleted);
+                        _bus.PPU!.FrameCompleted = false;
+                    }
+                }
+                else
+                {
+                    Thread.Sleep(1);
+                }
+            }
+        });
     }
 
     protected override void OnClosed(EventArgs e)
@@ -34,16 +64,6 @@ public partial class MainWindow : Window
     {
         if (_status.HasLoadRom)
         {
-            // Run Clock
-            if (_status.BusState == BUS_STATE.RUN)
-            {
-                do
-                {
-                    _bus.Clock();
-                } while (!_bus.PPU!.FrameCompleted);
-                _bus.PPU!.FrameCompleted = false;
-            }
-            
             // update image
             Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -57,6 +77,22 @@ public partial class MainWindow : Window
                 m_Video.InvalidateArrange();
                 m_Video.InvalidateVisual();
             }, DispatcherPriority.Render);
+        }
+    }
+
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.HandleKeyDown(e.Key);
+        }
+    }
+    
+    private void OnKeyUp(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.HandleKeyUp(e.Key);
         }
     }
 }

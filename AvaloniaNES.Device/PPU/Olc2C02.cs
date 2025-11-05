@@ -53,13 +53,24 @@ public partial class Olc2C02
     // Control Function
     public void Reset()
     {
+        fine_x = 0x00;
         address_latch = 0x00;
         ppu_data_buffer = 0x00;
         _scanLine = 0;
         _cycle = 0;
+        bg_next_tile_id = 0x00;
+        bg_next_tile_attr = 0x00;
+        bg_next_tile_lsb = 0x00;
+        bg_next_tile_msb = 0x00;
+        bg_shifter_attrib_lo = 0x0000;
+        bg_shifter_attrib_hi = 0x0000;
+        bg_shifter_pattern_lo = 0x0000;
+        bg_shifter_pattern_hi = 0x0000;
         _status.reg = 0x00;
         _mask.reg = 0x00;
         _control.reg = 0x00;
+        vram_addr.reg = 0x0000;
+        tram_addr.reg = 0x0000;
 
         Screen.Reset();
     }
@@ -73,7 +84,7 @@ public partial class Olc2C02
                 if (vram_addr.coarse_x == 31)
                 {
                     vram_addr.coarse_x = 0;
-                    vram_addr.nametable_x = (byte)~vram_addr.nametable_x;
+                    vram_addr.nametable_x = (byte)(vram_addr.nametable_x ^ 0x01);
                 }
                 else
                 {
@@ -146,6 +157,31 @@ public partial class Olc2C02
                 bg_shifter_attrib_lo <<= 1;
                 bg_shifter_attrib_hi <<= 1;
             }
+
+            if (_mask.render_sprites > 0 && _cycle >= 1 && _cycle < 258)
+            {
+                for (var i = 0;i<sprite_count;i++)
+                {
+                    if (spriteScanLine[i].x > 0)
+                    {
+                        spriteScanLine[i].x--;
+                    }
+                    else
+                    {
+                        sprite_shifter_pattern_lo[i] <<= 1;
+                        sprite_shifter_pattern_hi[i] <<= 1;
+                    }
+                }
+            }
+        }
+
+        byte flipbyte(byte input)
+        {
+            var result = input;
+            result = (byte)((result & 0xF0) >> 4 | (result & 0x0F) << 4);
+            result = (byte)((result & 0xCC) >> 2 | (result & 0x33) << 2);
+            result = (byte)((result & 0xAA) >> 1 | (result & 0x55) << 1);
+            return result;
         }
         
         //https://www.nesdev.org/wiki/File:Ppu.svg
@@ -161,6 +197,13 @@ public partial class Olc2C02
             if (_scanLine == -1 && _cycle == 1)
             {
                 _status.vertical_blank = 0;
+                _status.sprite_zero_hit = 0;
+                _status.sprite_overflow = 0;
+                for (var i = 0; i < 8; i++)
+                {
+                    sprite_shifter_pattern_lo[i] = 0;
+                    sprite_shifter_pattern_hi[i] = 0;
+                }
             }
             
             if ((_cycle >= 2 && _cycle < 258) || (_cycle >= 321 && _cycle < 338))
@@ -215,6 +258,125 @@ public partial class Olc2C02
             {
                 TransferAddressY();
             }
+            
+            //in one scanline,when pos is out of visible range,clear spriteline
+            if (_cycle == 257 && _scanLine >= 0)
+            {
+                // reset spriteScanLine
+                foreach (var item in spriteScanLine)
+                {
+                    item.attributes = 0xFF;
+                    item.id = 0xFF;
+                    item.x = 0xFF;
+                    item.y = 0xFF;
+                }
+                sprite_count = 0;
+                isSpriteZeroHitPossible = false;
+                byte nOAMEntry = 0;
+                
+                while (nOAMEntry < 64 && sprite_count < 9)  //need check overflow,so here is 9
+                {
+                    //find first 8 sprites in all 64 oam
+                    var diff = _scanLine - oam[nOAMEntry].y;
+                    if (diff >= 0 && diff < (_control.sprite_size > 0 ? 16 : 8))  //sprite size can control sprite height
+                    {
+                        //visible
+                        if (sprite_count < 8)
+                        {
+                            if (nOAMEntry == 0)
+                            {
+                                isSpriteZeroHitPossible = true;
+                            }
+                            
+                            spriteScanLine[sprite_count].y = oam[nOAMEntry].y;
+                            spriteScanLine[sprite_count].id = oam[nOAMEntry].id;
+                            spriteScanLine[sprite_count].attributes = oam[nOAMEntry].attributes;
+                            spriteScanLine[sprite_count].x = oam[nOAMEntry].x;
+                            sprite_count++;
+                        }
+                    }
+
+                    nOAMEntry++;
+                }
+                _status.sprite_overflow = sprite_count > 8 ? (byte)1 : (byte)0;
+            }
+
+            if (_cycle == 340)
+            {
+                // render all visible sprite
+                for (var i = 0; i < sprite_count; i++)
+                {
+                    byte pattern_bits_lo = 0x00;
+                    byte pattern_bits_hi = 0x00;
+                    ushort pattern_addr_lo = 0x0000;
+                    ushort pattern_addr_hi = 0x0000;
+                    if (_control.sprite_size == 0)
+                    {
+                        // 8x8
+                        if ((spriteScanLine[i].attributes & 0x80) == 0)
+                        {
+                            pattern_addr_lo = (ushort)((_control.pattern_sprite << 12)
+                                              | (spriteScanLine[i].id << 4)
+                                              | (_scanLine - spriteScanLine[i].y));
+                        }
+                        else
+                        {
+                            // vertical reverse
+                            pattern_addr_lo = (ushort)((_control.pattern_sprite << 12)
+                                                       | (spriteScanLine[i].id << 4)
+                                                       | (7 - (_scanLine - spriteScanLine[i].y)));
+                        }
+                    }
+                    else
+                    {
+                        // 8x16
+                        if ((spriteScanLine[i].attributes & 0x80) == 0)
+                        {
+                            if (_scanLine - spriteScanLine[i].y < 8)
+                            {
+                                pattern_addr_lo = (ushort)(((spriteScanLine[i].id & 0x01) << 12)
+                                                  | ((spriteScanLine[i].id & 0xFE) << 4)
+                                                  | ((_scanLine - spriteScanLine[i].y) & 0x07));
+                            }
+                            else
+                            {
+                                pattern_addr_lo = (ushort)(((spriteScanLine[i].id & 0x01) << 12)
+                                                           | (((spriteScanLine[i].id & 0xFE) + 1) << 4)
+                                                           | ((_scanLine - spriteScanLine[i].y) & 0x07));
+                            }
+                        }
+                        else
+                        {
+                            // vertical reverse
+                            if (_scanLine - spriteScanLine[i].y < 8)
+                            {
+                                pattern_addr_lo = (ushort)(((spriteScanLine[i].id & 0x01) << 12)
+                                                           | (((spriteScanLine[i].id & 0xFE) + 1) << 4)
+                                                           | ((7 - (_scanLine - spriteScanLine[i].y)) & 0x07));
+                            }
+                            else
+                            {
+                                pattern_addr_lo = (ushort)(((spriteScanLine[i].id & 0x01) << 12)
+                                                           | ((spriteScanLine[i].id & 0xFE) << 4)
+                                                           | ((7 - (_scanLine - spriteScanLine[i].y)) & 0x07));
+                            }
+                        }
+                    }
+
+                    pattern_addr_hi = (ushort)(pattern_addr_lo + 8);
+                    pattern_bits_lo = PPURead(pattern_addr_lo);
+                    pattern_bits_hi = PPURead(pattern_addr_hi);
+
+                    if ((spriteScanLine[i].attributes & 0x40) > 0)  // horizontal flip
+                    {
+                        pattern_bits_lo = flipbyte(pattern_bits_lo);
+                        pattern_bits_hi = flipbyte(pattern_bits_hi);
+                    }
+
+                    sprite_shifter_pattern_lo[i] = pattern_bits_lo;
+                    sprite_shifter_pattern_hi[i] = pattern_bits_hi;
+                }
+            }
         }
 
         if (_scanLine == 240)
@@ -255,8 +417,89 @@ public partial class Olc2C02
             var bg_pal1 = (byte)((bg_shifter_attrib_hi & bit_mux) > 0 ? 1 : 0);
             bg_palette = (byte)((bg_pal1 << 1) | bg_pal0);
         }
-        Screen.SetPixel(_cycle - 1, _scanLine, GetColorFromPaletteRam(bg_palette, bg_pixel));
         
+        byte fg_pixel = 0x00;
+        byte fg_palette = 0x00;
+        byte fg_priority = 0x00;
+        if (_mask.render_sprites > 0)
+        {
+            isSpriteZeroBeingRendered = false;
+            
+            for (var i = 0; i < 8; i++)
+            {
+                if (spriteScanLine[i].x == 0)
+                {
+                    var fg_pixel_hi = (byte)((sprite_shifter_pattern_hi[i] & 0x80) > 0 ? 1 : 0);
+                    var fg_pixel_lo = (byte)((sprite_shifter_pattern_lo[i] & 0x80) > 0 ? 1 : 0);
+                    fg_pixel = (byte)((fg_pixel_hi << 1) | fg_pixel_lo);
+                    fg_palette = (byte)((spriteScanLine[i].attributes & 0x03) + 0x04);
+                    fg_priority = (spriteScanLine[i].attributes & 0x20) == 0 ? (byte)0x01 : (byte)0x00;
+                    if (fg_pixel > 0)
+                    {
+                        if (i == 0)
+                        {
+                            isSpriteZeroBeingRendered = true;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        
+        //final
+        byte pixel = 0x00;
+        byte palette = 0x00;
+        if (bg_pixel == 0 && fg_pixel == 0)
+        {
+            pixel = 0x00;
+            palette = 0x00;
+        }
+        else if (bg_pixel == 0 && fg_pixel > 0)
+        {
+            pixel = fg_pixel;
+            palette = fg_palette;
+        }
+        else if (bg_pixel > 0 && fg_pixel == 0)
+        {
+            pixel = bg_pixel;
+            palette = bg_palette;
+        }
+        else
+        {
+            if (fg_priority > 0)
+            {
+                pixel = fg_pixel;
+                palette = fg_palette;
+            }
+            else
+            {
+                pixel = bg_pixel;
+                palette = bg_palette;
+            }
+
+            if (isSpriteZeroBeingRendered && isSpriteZeroHitPossible)
+            {
+                if ((_mask.render_background & _mask.render_sprites) > 0)
+                {
+                    if (_mask.render_sprites_left == 0 || _mask.render_background_left == 0)
+                    {
+                        if (_cycle >= 9 && _cycle < 258)
+                        {
+                            _status.sprite_zero_hit = 1;
+                        }
+                    }
+                    else
+                    {
+                        if (_cycle >= 1 && _cycle < 258)
+                        {
+                            _status.sprite_zero_hit = 1;
+                        }
+                    }
+                }
+            }
+        }
+        
+        Screen.SetPixel(_cycle - 1, _scanLine, GetColorFromPaletteRam(palette, pixel));
         _cycle++;
         if (_cycle >= 341)
         {

@@ -117,6 +117,14 @@ public partial class Olc2C02
         }
     }
 
+    public class ObjectAttributeEntry
+    {
+        public byte y { get; set; } //sprite y position
+        public byte id { get; set; } //tile id
+        public byte attributes { get; set; } //flag
+        public byte x { get; set; } //sprite x position
+    }
+
     private loopy_register vram_addr = new();
     private loopy_register tram_addr = new();
     private byte fine_x = 0x00;
@@ -130,4 +138,45 @@ public partial class Olc2C02
     private ushort bg_shifter_pattern_hi = 0x0000;
     private ushort bg_shifter_attrib_lo = 0x0000;
     private ushort bg_shifter_attrib_hi = 0x0000;
+
+    //OAM Total 256 bytes in PPU
+    private byte oam_addr = 0x00;
+    private byte[] oam_memory = new byte[256];
+    private ObjectAttributeEntry[] oam = Enumerable.Range(0, 64)
+        .Select(_ => new ObjectAttributeEntry()).ToArray();
+
+    private ObjectAttributeEntry[] spriteScanLine = Enumerable.Range(0, 8)
+        .Select(_ => new ObjectAttributeEntry()).ToArray();
+    private byte sprite_count = 0x00;
+    private byte[] sprite_shifter_pattern_lo = new byte[8];
+    private byte[] sprite_shifter_pattern_hi = new byte[8];
+
+    private bool isSpriteZeroHitPossible = false;
+    private bool isSpriteZeroBeingRendered = false;
+
+    public void WriteOAMByte(byte offset, byte value)
+    {
+        oam_memory[offset] = value;
+        var index = offset / 4;
+        var pos = offset % 4;
+        switch (pos)
+        {
+            case 0:
+                oam[index].y = value;
+                break;
+            case 1:
+                oam[index].id = value;
+                break;
+            case 2:
+                oam[index].attributes = value;
+                break;
+            case 3:
+                oam[index].x = value;
+                break;
+        }
+    }
+    public byte ReadOAMByte(byte offset)
+    {
+        return oam_memory[offset];
+    }
 }

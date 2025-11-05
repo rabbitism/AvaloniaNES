@@ -49,6 +49,7 @@ public partial class Olc2C02
                 case 0x0003:  //oam_addr
                     break;
                 case 0x0004:  //oam_data
+                    result = oam_memory[oam_addr];
                     break;
                 case 0x0005:  // scroll
                     break;
@@ -82,8 +83,10 @@ public partial class Olc2C02
             case 0x0002:  //status
                 break;
             case 0x0003:  //oam_addr
+                oam_addr = value;
                 break;
             case 0x0004:  //oam_data
+                oam_memory[oam_addr] = value;
                 break;
             case 0x0005:  // scroll
                 if (address_latch == 0)
