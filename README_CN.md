@@ -45,6 +45,6 @@
 自行编译后运行 AvaloniaNES.exe 或者使用已发布的可执行程序执行。
 注意我只会打包发布 Windows x64 版本以及 Linux x64 版本，其他平台请自行编译。
 
-## 授权
+## 许可证
 
-遵循 MIT 协议，请自由使用。
+遵循 Apache License 2.0 协议。

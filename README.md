@@ -46,4 +46,4 @@ Run AvaloniaNES.exe after compiling by yourself or use the released executable p
 
 ## License
 
-MIT License
+Apache License 2.0

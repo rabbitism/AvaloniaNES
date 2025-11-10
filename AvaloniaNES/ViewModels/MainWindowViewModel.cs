@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
 using Avalonia.Input;
 using AvaloniaNES.Device.BUS;
@@ -222,5 +223,19 @@ public partial class MainWindowViewModel : ViewModelBase
             buffer.Show();
             Status.HasShowKeyMapper = true;
         }
+    }
+
+    [RelayCommand]
+    private void ShowLicense()
+    {
+        var buffer = new LicenseView();
+        buffer.ShowDialog(_popupHelper._mainWnd!);
+    }
+
+    [RelayCommand]
+    private async Task GoGithub()
+    {
+        var buffer = new Uri("https://github.com/wky214269273/AvaloniaNES");
+        await _popupHelper._mainWnd!.Launcher.LaunchUriAsync(buffer);
     }
 }

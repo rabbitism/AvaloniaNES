@@ -69,10 +69,9 @@
                     <MenuItem Command="{Binding ShowDebuggerCommand}" Header="Show Debugger" />
                 </MenuItem>
                 <MenuItem Focusable="False" Header="About">
-                    <MenuItem Header="AvaloniaNES" />
-                    <MenuItem Header="Github" />
+                    <MenuItem Command="{Binding GoGithubCommand}" Header="Github" />
                     <Separator />
-                    <MenuItem Header="License" />
+                    <MenuItem Command="{Binding ShowLicenseCommand}" Header="License" />
                 </MenuItem>
             </Menu>
         </Border>
